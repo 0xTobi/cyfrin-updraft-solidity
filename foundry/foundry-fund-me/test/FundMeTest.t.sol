@@ -14,6 +14,8 @@ contract FundMeTest is Test {
     address USER = makeAddr("user");
 
     // This is run before any other function in the contract.
+    // setUp is called everytime before any other function 
+    // say you want to run testMinDollarIsFive and testOwnerIsMsgSender, setUp runs once before testMinDollar, and once before testOwner.
     function setUp() external {
         // fundMe = new FundMe(0x694AA1769357215DE4FAC081bf1f309aDC325306);
         DeployFundMe deployFundMe = new DeployFundMe();
@@ -27,10 +29,10 @@ contract FundMeTest is Test {
     }
 
     function testOwnerIsMsgSender() public view {
-        console.log(fundMe.i_owner()); // This is the address of the contract deployer for FundMe i.e FundMeTest()
+        console.log(fundMe.getOwnerAddress()); // This is the address of the contract deployer for FundMe i.e FundMeTest()
         console.log(msg.sender); // This is our address
         console.log(address(this)); // This is the address of this contract.
-        assertEq(fundMe.i_owner(), msg.sender);
+        assertEq(fundMe.getOwnerAddress(), msg.sender);
     }
 
     function testPriceFeedVersionIsAccurate() public view {
@@ -50,5 +52,66 @@ contract FundMeTest is Test {
 
         uint256 amountFUnded = fundMe.getaddressToAmountFunded(USER);
         assertEq(amountFUnded, SEND_VALUE);
+    }
+
+    function testAddsFunderToArrayOfFunders() public {
+        vm.prank(USER);
+        fundMe.fund{value: SEND_VALUE}();
+
+        address funder = fundMe.getFunders(0);
+        assertEq(funder, USER);
+    }
+
+    modifier funded() {
+        vm.prank(USER);
+        fundMe.fund{value: SEND_VALUE}();
+        _;
+    }
+
+    function testOnlyOwnerCanWithdraw() public funded {        
+        vm.prank(USER);     // USER is not the owner 
+        vm.expectRevert();
+        fundMe.withdraw();
+    }
+
+    function testWithdrawFromSingleFunder() public funded {
+        // Arrange
+        uint256 startingOwnerBalance = fundMe.getOwnerAddress().balance;
+        uint256 startingFundMeBalance = address(fundMe).balance;
+
+        // Action
+        vm.prank(fundMe.getOwnerAddress());
+        fundMe.withdraw();
+
+        // Assert 
+        uint256 endingOwnerBalance = fundMe.getOwnerAddress().balance;
+        uint256 endingFundMeBalance = address(fundMe).balance;
+        assertEq(endingFundMeBalance, 0);
+        assertEq(startingOwnerBalance + startingFundMeBalance, endingOwnerBalance);
+    }
+
+    function testWithDrawFromMultipleFunders() public funded() {
+        // Arrange
+        uint160 numberOfFunders = 10;
+        uint160 startingFunderIndex = 1;
+
+        for (uint160 i = startingFunderIndex; i < numberOfFunders; i++) {
+            hoax(address(i), STARTING_BALANCE);     // Hoaxing does both prank and deal - Sending the next tx from this address and giving it a starting balance.
+            fundMe.fund{value: SEND_VALUE}();
+        }
+
+        uint256 startingOwnerBalance = fundMe.getOwnerAddress().balance;
+        uint256 startingFundMeBalance = address(fundMe).balance;
+
+        // Action
+        vm.startPrank(fundMe.getOwnerAddress());
+        fundMe.withdraw();
+        vm.stopPrank();
+
+        // Assert
+        uint256 endingOwnerBalance = fundMe.getOwnerAddress().balance;
+        uint256 endingFundMeBalance = address(fundMe).balance;
+        assertEq(endingFundMeBalance, 0);
+        assertEq(startingOwnerBalance + startingFundMeBalance, endingOwnerBalance);
     }
 }
