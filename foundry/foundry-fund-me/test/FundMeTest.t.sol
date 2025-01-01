@@ -11,6 +11,7 @@ contract FundMeTest is Test {
 
     uint256 constant SEND_VALUE = 0.1 ether;    // 100000000000000000
     uint256 constant STARTING_BALANCE = 10 ether;    // 100000000000000000
+    uint256 constant GAS_PRICE = 1;
     address USER = makeAddr("user");
 
     // This is run before any other function in the contract.
@@ -80,8 +81,15 @@ contract FundMeTest is Test {
         uint256 startingFundMeBalance = address(fundMe).balance;
 
         // Action
-        vm.prank(fundMe.getOwnerAddress());
+        uint256 gasStart = gasleft();           // 1000
+
+        vm.txGasPrice(GAS_PRICE);               // Sets a gas price for subsequent tx in this function.
+        vm.prank(fundMe.getOwnerAddress());     // 200
         fundMe.withdraw();
+
+        uint256 gasEnd = gasleft();             // 800  
+        uint256 gasUsed = (gasStart - gasEnd) * tx.gasprice;    // Equivalent to uint256 gasUsed = (gasStart - gasEnd) * GAS_PRICE;
+        console.log(gasUsed);
 
         // Assert 
         uint256 endingOwnerBalance = fundMe.getOwnerAddress().balance;
@@ -106,6 +114,31 @@ contract FundMeTest is Test {
         // Action
         vm.startPrank(fundMe.getOwnerAddress());
         fundMe.withdraw();
+        vm.stopPrank();
+
+        // Assert
+        uint256 endingOwnerBalance = fundMe.getOwnerAddress().balance;
+        uint256 endingFundMeBalance = address(fundMe).balance;
+        assertEq(endingFundMeBalance, 0);
+        assertEq(startingOwnerBalance + startingFundMeBalance, endingOwnerBalance);
+    }
+
+    function testWithDrawFromMultipleFundersCheaper() public funded() {
+        // Arrange
+        uint160 numberOfFunders = 10;
+        uint160 startingFunderIndex = 1;
+
+        for (uint160 i = startingFunderIndex; i < numberOfFunders; i++) {
+            hoax(address(i), STARTING_BALANCE);     // Hoaxing does both prank and deal - Sending the next tx from this address and giving it a starting balance.
+            fundMe.fund{value: SEND_VALUE}();
+        }
+
+        uint256 startingOwnerBalance = fundMe.getOwnerAddress().balance;
+        uint256 startingFundMeBalance = address(fundMe).balance;
+
+        // Action
+        vm.startPrank(fundMe.getOwnerAddress());
+        fundMe.cheaperWithdraw();
         vm.stopPrank();
 
         // Assert
