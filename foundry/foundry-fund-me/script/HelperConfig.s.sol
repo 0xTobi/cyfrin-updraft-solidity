@@ -6,7 +6,6 @@ import {Script} from "forge-std/Script.sol";
 import {MockV3Aggregator} from "../test/Mock/MockV3Aggregator.sol";
 
 contract HelperConfig is Script {
-    NetworkConfig public activeNetworkConfig;
 
     uint8 DECIMALS = 8;
     int256 INITIAL_PRICE = 2000e8;
@@ -14,6 +13,8 @@ contract HelperConfig is Script {
     struct NetworkConfig {
         address priceFeed;
     }
+
+    NetworkConfig public activeNetworkConfig;
 
     constructor() {
         if (block.chainid == 11155111) {
